@@ -16,6 +16,19 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+        # paths
+    docs_dir: str = "data/sample_docs"
+    index_dir: str = "data/index"
+
+    # chunking
+    chunk_size: int = 800
+    chunk_overlap: int = 120
+    top_k: int = 5
+
+    # embeddings
+    embedding_model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
