@@ -1,7 +1,8 @@
 from functools import lru_cache
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
 from pathlib import Path
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2] #корневая ппапка проекта
@@ -32,6 +33,14 @@ class Settings(BaseSettings):
 
     # embeddings
     embedding_model_name: str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+
+    @field_validator("docs_dir", "index_dir", mode="before")
+    @classmethod
+    def resolve_project_paths(cls, value: str) -> str:
+        path = Path(value)
+        if not path.is_absolute():
+            path = PROJECT_ROOT / path
+        return str(path)
 
 
 
