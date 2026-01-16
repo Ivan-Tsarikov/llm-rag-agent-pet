@@ -1,6 +1,10 @@
 from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2] #корневая ппапка проекта
 
 class Settings(BaseSettings):
     # runtime
@@ -12,13 +16,14 @@ class Settings(BaseSettings):
     api_port: int = 8000
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=str(PROJECT_ROOT / ".env"),
+        env_file_encoding="utf-8",
         extra="ignore",
     )
 
-        # paths
-    docs_dir: str = "data/sample_docs"
-    index_dir: str = "data/index"
+    # paths
+    docs_dir: str = str(PROJECT_ROOT / "data" / "sample_docs")
+    index_dir: str = str(PROJECT_ROOT / "data" / "index")
 
     # chunking
     chunk_size: int = 800
