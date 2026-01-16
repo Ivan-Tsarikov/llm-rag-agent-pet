@@ -1,4 +1,6 @@
-from fastapi import FastAPI
+import json
+
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from src.core.config import get_settings
@@ -14,7 +16,7 @@ from src.rag.service import generate_answer
 from src.rag.llm_clients import LLMError
 
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 settings = get_settings()
 setup_logging(settings.log_level)
@@ -35,6 +37,26 @@ try:
 except Exception as e:
     log.warning("Retriever not ready (index missing?): %s", e)
 
+
+async def parse_json_request(request: Request) -> dict:
+    body = await request.body()
+    if not body:
+        return {}
+
+    for encoding in ("utf-8", "cp1251"):
+        try:
+            text = body.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+        if encoding == "utf-8" and "\ufffd" in text:
+            continue
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            continue
+
+    return await request.json()
+
 @app.get("/health")
 def health():
     # Минимум информации: достаточно, чтобы при мониторинг понять “жив/не жив”
@@ -51,7 +73,12 @@ def root():
     )
 
 @app.post("/ask", response_model=AskResponse)
-async def ask(req: AskRequest):
+async def ask(request: Request):
+    try:
+        req = AskRequest.model_validate(await parse_json_request(request))
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors())
+
     if retriever is None:
         raise HTTPException(
             status_code=503,
@@ -90,12 +117,26 @@ class DebugSearchRequest(BaseModel):
     top_k: int = Field(default=10, ge=1, le=50)
 
 @app.post("/debug/search")
-def debug_search(req: DebugSearchRequest):
+async def debug_search(request: Request):
+    try:
+        req = DebugSearchRequest.model_validate(await parse_json_request(request))
+    except ValidationError as exc:
+        raise HTTPException(status_code=422, detail=exc.errors())
+
+    if retriever is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Index is not ready. Run: python -m scripts.build_index",
+        )
+
     hits = retriever.search(req.question, top_k=req.top_k)
+    query_norm = retriever.query_vector_norm(req.question)
 
     # важное: покажем вопрос, и первые 5 результатов
     return {
         "question_received": req.question,
+        "embedding_model_name": retriever.embedding_model_name,
+        "query_vector_l2_norm": query_norm,
         "top": [
             {
                 "source_path": h.record.source_path,
@@ -117,11 +158,13 @@ def debug_index():
         "index_files_exist": {
             "faiss.index": (index_dir / "faiss.index").exists(),
             "chunks.jsonl": (index_dir / "chunks.jsonl").exists(),
+            "index_meta.json": (index_dir / "index_meta.json").exists(),
         },
         "retriever_ready": retriever is not None,
     }
     if retriever is not None:
         info["chunks_loaded"] = len(retriever.store.records)
+        info["embedding_model_name"] = retriever.embedding_model_name
     return info
 
 @app.middleware("http")
