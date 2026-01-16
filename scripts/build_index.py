@@ -1,4 +1,6 @@
 from pathlib import Path
+import json
+from datetime import datetime
 
 from src.core.config import get_settings
 from src.ingest.pipeline import build_chunks
@@ -37,11 +39,30 @@ def main():
     store = FaissStore.build(vectors=vectors, records=records)
     store.save(index_dir)
 
+    # --- индекс-метаданные (паспорт индекса) ---
+    meta = {
+        "created_at": datetime.now().isoformat(),
+        "embedding_model_name": settings.embedding_model_name,
+        "docs_dir": settings.docs_dir,
+        "chunk_size": settings.chunk_size,
+        "chunk_overlap": settings.chunk_overlap,
+        "total_chunks": len(records),
+        "vector_dim": int(vectors.shape[1]),
+    }
+
+    (index_dir / "index_meta.json").write_text(
+        json.dumps(meta, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    # -----------------------------------------
+
     print(f"Saved index to: {index_dir.resolve()}")
     print("Files:")
     print(f" - {index_dir / 'faiss.index'}")
     print(f" - {index_dir / 'chunks.jsonl'}")
+    print(f" - {index_dir / 'index_meta.json'}")
 
 
 if __name__ == "__main__":
     main()
+    
