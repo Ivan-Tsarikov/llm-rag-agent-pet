@@ -38,6 +38,8 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     app_env: Literal["dev", "prod"] = Field(default="dev", alias="APP_ENV")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+    tool_backend: Literal["local", "mcp"] = Field(default="local", alias="TOOL_BACKEND")
+    mcp_url: str = Field(default="http://localhost:9001", alias="MCP_URL")
 
     # ------------------------------------------------------------------
     # Data paths

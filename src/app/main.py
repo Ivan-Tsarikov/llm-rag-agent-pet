@@ -18,9 +18,10 @@ from src.rag.retriever import Retriever
 from src.rag.service import generate_answer
 from src.rag.llm_clients import LLMError, OllamaClient, OpenAICompatClient
 
-from src.agent.tools import ToolRegistry, ToolSpec
-from src.agent.calc import safe_calc, CalcError
+from src.agent.tools import ToolRegistry
+from src.agent.tool_backend import build_tool_registry
 from src.agent.agent import run_agent, AgentError
+from src.mcp.client import MCPClient
 
 
 # ---------------------------------------------------------------------
@@ -85,69 +86,17 @@ async def startup_event() -> None:
         app.state.llm_client = None
         log.warning("LLM client not ready: %s", e)
 
-    # Agent tools registry
-    tools = ToolRegistry()
+        
+    tool_backend = settings.tool_backend
+    mcp_url = settings.mcp_url
+    retriever = getattr(app.state, "retriever", None)
+    mcp_client = MCPClient(mcp_url) if tool_backend.lower() == "mcp" else None
 
-    async def tool_search_docs(args: dict) -> dict:
-        retriever = getattr(app.state, "retriever", None)
-        if retriever is None:
-            return {"error": "Index is not ready. Run: python scripts/build_index.py"}
-
-        query = str(args.get("query", "")).strip()
-        top_k = int(args.get("top_k", 5))
-        top_k = max(1, min(top_k, 10))
-
-        hits = retriever.search(query, top_k=top_k)
-        return {
-            "hits": [
-                {
-                    "source_path": h.record.source_path,
-                    "chunk_id": h.record.chunk_id,
-                    "score": float(h.score),
-                    "text": h.record.text,
-                }
-                for h in hits
-            ]
-        }
-
-    async def tool_calc(args: dict) -> dict:
-        expr = str(args.get("expression", "")).strip()
-        try:
-            r = safe_calc(expr)
-            return {"value": r.value, "formatted": r.formatted}
-        except CalcError as e:
-            return {"error": str(e)}
-
-    tools.register(
-        ToolSpec(
-            name="search_docs",
-            description="Ищет релевантные фрагменты в базе документов.",
-            args_schema={
-                "type": "object",
-                "properties": {
-                    "query": {"type": "string"},
-                    "top_k": {"type": "integer"},
-                },
-                "required": ["query"],
-            },
-            handler=tool_search_docs,
-            timeout_s=2.0,
+    tools = build_tool_registry(
+        backend=tool_backend,
+        retriever=retriever,
+        mcp_client=mcp_client,
         )
-    )
-
-    tools.register(
-        ToolSpec(
-            name="calc",
-            description="Считает арифметическое выражение (безопасно).",
-            args_schema={
-                "type": "object",
-                "properties": {"expression": {"type": "string"}},
-                "required": ["expression"],
-            },
-            handler=tool_calc,
-            timeout_s=1.0,
-        )
-    )
 
     app.state.agent_tools = tools
     log.info("Agent tools registered: %s", sorted(tools.allowlist()))

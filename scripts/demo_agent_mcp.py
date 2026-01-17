@@ -1,31 +1,33 @@
 import asyncio
-import json
+import os
 
-from src.core.config import get_settings
-from src.rag.retriever import Retriever
-from src.agent.tool_backend import build_tool_registry
 from src.agent.agent import run_agent
-
+from src.agent.tool_backend import build_tool_registry
+from src.core.config import get_settings
+from src.mcp.client import MCPClient
 from src.rag.llm_clients import OllamaClient
 
 
-async def main():
+async def main() -> None:
     settings = get_settings()
-    retriever = Retriever()
+    _ = settings
+    
+    os.environ["TOOL_BACKEND"] = "mcp"
+
+    mcp_url = os.getenv("MCP_URL", "http://localhost:9001")
+    mcp_client = MCPClient(mcp_url)
+    tools = build_tool_registry(backend="mcp", mcp_client=mcp_client)
 
     llm = OllamaClient()
-
-    tools = build_tool_registry(backend="local", retriever=retriever)
 
     async def llm_generate(prompt: str, timeout_s: float):
         return await llm.generate(prompt, timeout_s=timeout_s)
 
     questions = [
         "Как восстановить доступ к аккаунту?",
-        "Какие признаки подозрительной активности?",
         "Посчитай 3.5% от 12000",
-        "Какие правила у пунктов выдачи (ПВЗ)?",
     ]
+
 
     for q in questions:
         print("\n" + "=" * 80)
