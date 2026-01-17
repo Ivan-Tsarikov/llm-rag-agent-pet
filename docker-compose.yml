@@ -1,0 +1,27 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      TOOL_BACKEND: "${TOOL_BACKEND:-local}"
+      MCP_URL: "http://mcp:9001"
+      OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+    depends_on:
+      - mcp
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  mcp:
+    build: .
+    command: ["python", "-m", "scripts.run_mcp_server"]
+    ports:
+      - "9001:9001"
+    volumes:
+      - ./data:/app/data
+    environment:
+      OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
