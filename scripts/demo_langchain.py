@@ -1,3 +1,5 @@
+"""Run the LangChain demo pipeline from the CLI."""
+
 from __future__ import annotations
 
 import asyncio
@@ -10,6 +12,7 @@ from src.langchain_demo.pipeline import run_langchain_rag
 
 
 async def _main() -> int:
+    """Execute a single LangChain RAG request."""
     question = sys.argv[1] if len(sys.argv) > 1 else "Как восстановить доступ к аккаунту?"
     retriever = Retriever()
 

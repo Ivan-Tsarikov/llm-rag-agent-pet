@@ -1,3 +1,9 @@
+"""Run a smoke test against local Docker services.
+
+Example:
+    python -m scripts.docker_smoke_test
+"""
+
 from __future__ import annotations
 
 import json
@@ -7,6 +13,7 @@ import urllib.request
 
 
 def request_json(method: str, url: str, payload: dict | None = None) -> dict:
+    """Perform an HTTP request and return parsed JSON."""
     data = None
     headers = {"Accept": "application/json"}
     if payload is not None:
@@ -30,11 +37,13 @@ def request_json(method: str, url: str, payload: dict | None = None) -> dict:
 
 
 def assert_true(condition: bool, message: str) -> None:
+    """Raise AssertionError with a message if condition is false."""
     if not condition:
         raise AssertionError(message)
 
 
 def main() -> int:
+    """Run a small suite of checks against the API and MCP server."""
     print("[1/3] API health check...")
     health = request_json("GET", "http://localhost:8000/health")
     assert_true(health.get("status") == "ok", f"Unexpected health response: {health}")

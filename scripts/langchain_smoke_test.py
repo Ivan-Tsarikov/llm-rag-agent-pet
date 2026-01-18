@@ -1,3 +1,5 @@
+"""Smoke test for the LangChain RAG endpoint."""
+
 from __future__ import annotations
 
 import json
@@ -7,6 +9,7 @@ import urllib.request
 
 
 def request_json(method: str, url: str, payload: dict | None = None) -> dict:
+    """Perform an HTTP request and return parsed JSON."""
     data = None
     headers = {"Accept": "application/json"}
     if payload is not None:
@@ -30,11 +33,13 @@ def request_json(method: str, url: str, payload: dict | None = None) -> dict:
 
 
 def assert_true(condition: bool, message: str) -> None:
+    """Raise AssertionError with a message if condition is false."""
     if not condition:
         raise AssertionError(message)
 
 
 def main() -> int:
+    """Run a minimal check against /ask_langchain."""
     print("[1/1] LangChain ask...")
     response = request_json(
         "POST",

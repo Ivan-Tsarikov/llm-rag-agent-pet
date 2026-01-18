@@ -1,3 +1,9 @@
+"""Run the agent with tools served via MCP.
+
+Example:
+    python -m scripts.demo_agent_mcp
+"""
+
 import asyncio
 import os
 
@@ -9,9 +15,11 @@ from src.rag.llm_clients import OllamaClient
 
 
 async def main() -> None:
+    """Run a short MCP-backed agent demo."""
     settings = get_settings()
     _ = settings
-    
+
+    # TOOL_BACKEND toggles MCP usage in the main app, kept for parity in demos.
     os.environ["TOOL_BACKEND"] = "mcp"
 
     mcp_url = os.getenv("MCP_URL", "http://localhost:9001")
@@ -25,9 +33,10 @@ async def main() -> None:
 
     questions = [
         "Как восстановить доступ к аккаунту?",
+        "Какие признаки подозрительной активности?",
         "Посчитай 3.5% от 12000",
+        "Какие правила у пунктов выдачи (ПВЗ)?",
     ]
-
 
     for q in questions:
         print("\n" + "=" * 80)

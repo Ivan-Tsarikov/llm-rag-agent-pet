@@ -1,3 +1,5 @@
+"""Compare Retriever.search results with a direct FAISS query."""
+
 from __future__ import annotations
 
 import sys
@@ -10,6 +12,7 @@ from src.rag.retriever import Retriever
 
 
 def _print_hits(label: str, hits) -> None:
+    """Print a labeled list of hits."""
     print(label)
     for i, h in enumerate(hits, start=1):
         print(f"{i}) score={h.score:.4f} | {h.record.source_path} | chunk_id={h.record.chunk_id}")
@@ -17,6 +20,7 @@ def _print_hits(label: str, hits) -> None:
 
 
 def main() -> None:
+    """Run a side-by-side search comparison."""
     if len(sys.argv) < 2:
         print("Usage: python -m scripts.compare_search \"your query\"")
         return

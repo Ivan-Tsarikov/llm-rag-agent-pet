@@ -1,3 +1,9 @@
+"""FastAPI application entrypoint for the RAG + Agent + MCP service.
+
+This module wires app lifecycle hooks, dependencies, and HTTP endpoints.
+It intentionally keeps runtime behavior simple and explicit for demos.
+"""
+
 from __future__ import annotations
 
 import os
@@ -25,9 +31,9 @@ from src.agent.agent import run_agent, AgentError
 from src.mcp.client import MCPClient
 
 
-# ---------------------------------------------------------------------
-# App bootstrap
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Section: App bootstrap
+# ---------------------------------------------------------------------------
 settings = get_settings()
 setup_logging(settings.log_level)
 log = get_logger(__name__)
@@ -39,10 +45,11 @@ app.add_middleware(SimpleAccessLogMiddleware)
 app.add_exception_handler(Exception, unhandled_exception_handler)
 
 
-# ---------------------------------------------------------------------
-# State helpers
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Section: State helpers
+# ---------------------------------------------------------------------------
 def _get_retriever() -> Retriever:
+    """Return the app-scoped retriever or raise HTTP 503 if unavailable."""
     r = getattr(app.state, "retriever", None)
     if r is None:
         raise HTTPException(
@@ -53,6 +60,7 @@ def _get_retriever() -> Retriever:
 
 
 def _get_llm_client():
+    """Return the app-scoped LLM client or raise HTTP 503 if unavailable."""
     c = getattr(app.state, "llm_client", None)
     if c is None:
         raise HTTPException(
@@ -62,11 +70,12 @@ def _get_llm_client():
     return c
 
 
-# ---------------------------------------------------------------------
-# Startup init: retriever + llm client + agent tools
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Section: Startup init (retriever + LLM client + agent tools)
+# ---------------------------------------------------------------------------
 @app.on_event("startup")
 async def startup_event() -> None:
+    """Initialize optional services for retrieval, LLM access, and tools."""
     # Retriever
     try:
         app.state.retriever = Retriever()
@@ -87,7 +96,8 @@ async def startup_event() -> None:
         app.state.llm_client = None
         log.warning("LLM client not ready: %s", e)
 
-        
+    # Tool registry can be backed by local tools or MCP, controlled by TOOL_BACKEND.
+    # MCP is a separate service for isolation and easier tool deployment.    
     tool_backend = settings.tool_backend
     mcp_url = settings.mcp_url
     retriever = getattr(app.state, "retriever", None)
@@ -103,9 +113,10 @@ async def startup_event() -> None:
     log.info("Agent tools registered: %s", sorted(tools.allowlist()))
 
 
-# ---------------------------------------------------------------------
-# Basic endpoints
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Section: Basic endpoints
+# ---------------------------------------------------------------------------
+# Minimal service metadata and health checks
 @app.get("/health")
 def health():
     return {"status": "ok", "env": settings.app_env}
@@ -113,6 +124,7 @@ def health():
 
 @app.get("/")
 def root():
+    """Return minimal liveness info."""
     return JSONResponse(
         {
             "service": "rag-agent-mcp",
@@ -128,11 +140,13 @@ def root():
     )
 
 
-# ---------------------------------------------------------------------
-# RAG endpoint
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Section: RAG endpoint
+# ---------------------------------------------------------------------------
+# Standard retrieval + generation flow without tool-calling
 @app.post("/ask", response_model=AskResponse)
 async def ask(req: AskRequest):
+    """Answer a question using local retrieval and an LLM."""
     retriever = _get_retriever()
 
     top_k = req.top_k or settings.top_k
@@ -140,7 +154,7 @@ async def ask(req: AskRequest):
 
     llm_mode = os.getenv("LLM_MODE", "ollama").lower()  # ollama|openai
 
-    # 1 ретрай при LLM ошибке
+    # One retry guards against transient LLM errors without changing output format
     try:
         answer = await generate_answer(req.question, hits, llm_mode=llm_mode)
     except LLMError as e:
@@ -162,11 +176,13 @@ async def ask(req: AskRequest):
     return AskResponse(answer=answer, sources=sources)
 
 
-# ---------------------------------------------------------------------
-# LangChain demo endpoint (optional)
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Section: LangChain demo endpoint (optional)
+# ---------------------------------------------------------------------------
+# Separate endpoint to keep the core RAG path stable.
 @app.post("/ask_langchain", response_model=AskResponse)
 async def ask_langchain(req: AskRequest):
+    """Answer a question via the optional LangChain pipeline."""
     retriever = _get_retriever()
     llm_client = _get_llm_client()
 
@@ -185,9 +201,10 @@ async def ask_langchain(req: AskRequest):
     return AskResponse(answer=answer, sources=sources)
 
 
-# ---------------------------------------------------------------------
-# Debug endpoints (retrieval only)
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Section: Debug endpoints (retrieval only)
+# ---------------------------------------------------------------------------
+# Debug helpers expose retrieval behavior without invoking the LLM.
 class DebugSearchRequest(BaseModel):
     question: str = Field(min_length=2, max_length=2000)
     top_k: int = Field(default=10, ge=1, le=50)
@@ -224,6 +241,7 @@ def debug_search(req: DebugSearchRequest):
 
 @app.get("/debug/index")
 def debug_index():
+    """Return index presence details and loaded record counts."""
     index_dir = Path(settings.index_dir).resolve()
     info: dict[str, Any] = {
         "cwd": os.getcwd(),
@@ -243,9 +261,14 @@ def debug_index():
     return info
 
 
-# гарантируем UTF-8 в JSON-ответах (ответы, не запросы)
+# ---------------------------------------------------------------------------
+# Section: Response encoding
+# ---------------------------------------------------------------------------
+# Some clients (especially Windows/PowerShell) mis-handle charset-less JSON.
+# Enforcing UTF-8 in responses avoids mojibake without changing payloads.
 @app.middleware("http")
 async def force_json_utf8(request, call_next):
+    """Ensure UTF-8 charset is declared for JSON responses."""
     response = await call_next(request)
     ct = response.headers.get("content-type", "")
     if ct.startswith("application/json") and "charset=" not in ct:
@@ -253,9 +276,10 @@ async def force_json_utf8(request, call_next):
     return response
 
 
-# ---------------------------------------------------------------------
-# Agent endpoint (JSON tool-calling)
-# ---------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Section: Agent endpoint (JSON tool-calling)
+# ---------------------------------------------------------------------------
+# Exposes the tool-calling agent; the response model stays stable for demos.
 class AgentAskRequest(BaseModel):
     question: str = Field(min_length=2, max_length=2000)
     top_k: Optional[int] = Field(default=5, ge=1, le=10)
@@ -270,6 +294,7 @@ class AgentAskResponse(BaseModel):
 
 @app.post("/agent/ask", response_model=AgentAskResponse)
 async def agent_ask(req: AgentAskRequest):
+    """Run the tool-calling agent and return answer with optional trace."""
     tools: ToolRegistry = getattr(app.state, "agent_tools", None)
     if tools is None:
         raise HTTPException(status_code=503, detail="Agent tools are not ready.")
@@ -277,6 +302,7 @@ async def agent_ask(req: AgentAskRequest):
     llm_client = _get_llm_client()
 
     async def llm_generate(prompt: str, timeout_s: float):
+        """Adapter to pass the configured LLM client into the agent."""
         # llm_client должен поддерживать generate(prompt, timeout_s=...)
         return await llm_client.generate(prompt, timeout_s=timeout_s)
 

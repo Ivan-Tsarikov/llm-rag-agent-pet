@@ -1,3 +1,5 @@
+"""Preview how documents are chunked before building the index."""
+
 from pathlib import Path
 
 from src.ingest.loader import iter_documents
@@ -6,6 +8,7 @@ from src.ingest.md_chunker import chunk_markdown
 
 
 def main():
+    """Load sample docs and print a short chunk preview."""
     docs_dir = Path("data/sample_docs")
     print(f"Loading docs from: {docs_dir.resolve()}")
 

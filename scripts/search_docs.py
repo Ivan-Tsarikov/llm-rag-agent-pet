@@ -1,3 +1,5 @@
+"""Search the FAISS index from the command line."""
+
 import sys
 from pathlib import Path
 
@@ -7,6 +9,7 @@ from src.index.faiss_store import FaissStore
 
 
 def main():
+    """Run a query against the FAISS index and print hits."""
     if len(sys.argv) < 2:
         print("Usage: python scripts/search_docs.py \"your query\"")
         return
@@ -27,6 +30,7 @@ def main():
         print(f"{i}) score={h.score:.4f} | {h.record.source_path} | chunk_id={h.record.chunk_id}")
         print(f"   {preview}...")
         print()
+
 
 if __name__ == "__main__":
     main()

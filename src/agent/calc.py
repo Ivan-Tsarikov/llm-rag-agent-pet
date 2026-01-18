@@ -1,3 +1,5 @@
+"""Safe arithmetic evaluator for the agent calc tool."""
+
 from __future__ import annotations
 
 import ast
@@ -6,6 +8,7 @@ from dataclasses import dataclass
 
 
 class CalcError(ValueError):
+    """Raised when the expression is invalid or unsafe."""
     pass
 
 
@@ -15,17 +18,16 @@ _ALLOWED_UNARYOPS = (ast.UAdd, ast.USub)
 
 @dataclass(frozen=True)
 class CalcResult:
+    """Result container for safe_calc."""
     value: float
     formatted: str
 
 
 def _preprocess(expr: str) -> str:
-    """
-    Мини-поддержка процентов:
-    '3.5% * 12000' -> '(3.5/100) * 12000'
-    """
+    """Preprocess an expression, including percent normalization."""
     s = expr.strip()
     if len(s) > 200:
+        # Hard limit protects the evaluator from pathological inputs.
         raise CalcError("Expression too long (max 200 chars).")
 
     # заменить запятые в десятичных на точки (частый ввод)
@@ -37,6 +39,7 @@ def _preprocess(expr: str) -> str:
 
 
 def _validate_ast(node: ast.AST) -> None:
+    """Validate the AST to allow only safe numeric operations."""
     if isinstance(node, ast.Expression):
         _validate_ast(node.body)
         return
@@ -63,6 +66,7 @@ def _validate_ast(node: ast.AST) -> None:
 
 
 def safe_calc(expr: str) -> CalcResult:
+    """Evaluate a numeric expression with strict AST validation."""
     s = _preprocess(expr)
     try:
         tree = ast.parse(s, mode="eval")
