@@ -1,0 +1,91 @@
+# Repository map
+
+Ниже — подробная карта репозитория с кратким назначением каждого файла и директории.
+
+## Root
+- `README.md` — основной обзор проекта, инструкции запуска и демонстрации.
+- `LICENSE` — лицензия проекта.
+- `Dockerfile` — сборка образа API/MCP сервиса.
+- `docker-compose.yml` — запуск API и MCP в двух сервисах, прокидывание портов/переменных.
+- `requirements.txt` — зависимости Python.
+- `.env.example` — пример переменных окружения.
+- `.dockerignore` — исключения для docker build.
+- `.gitignore` — исключения для Git.
+- `.vscode/` — настройки редактора:
+  - `.vscode/settings.json` — настройки VS Code.
+  - `.vscode/extensions.json` — рекомендуемые расширения.
+  - `.vscode/launch.json` — конфигурации запуска/отладки.
+- `docs/` — документация проекта:
+  - `docs/repo_map.md` — данный документ (карта репозитория).
+- `data/` — данные для RAG‑индекса:
+  - `data/sample_docs/` — набор примерных документов для ingestion:
+    - `account_security.pdf` — политика безопасности аккаунта.
+    - `buyer_onboarding.pdf` — документы по онбордингу покупателя.
+    - `case_chargeback.txt` — кейс по чарджбэку.
+    - `case_lost_package.txt` — кейс по потерянной посылке.
+    - `dispute_resolution.md` — политика разрешения споров.
+    - `faq_delivery.md` — FAQ по доставке.
+    - `faq_payments.md` — FAQ по оплатам.
+    - `glossary.txt` — глоссарий.
+    - `instruction_contact_support.txt` — инструкция по обращению в поддержку.
+    - `instruction_return_step_by_step.md` — инструкция по возврату.
+    - `moderation_rules.md` — правила модерации.
+    - `personal_data_policy.txt` — политика персональных данных.
+    - `pickup_points.md` — правила пунктов выдачи.
+    - `policy_prohibited_items.md` — политика запрещённых товаров.
+    - `pricing_commission_examples.txt` — примеры комиссий.
+    - `pricing_fees.md` — тарифы/комиссии.
+    - `seller_onboarding.md` — онбординг продавца.
+    - `support_escalation.txt` — эскалация обращений.
+    - `support_sla.md` — SLA поддержки.
+  - `data/index/` — каталог с FAISS‑индексом (создаётся скриптом `scripts/build_index.py`).
+- `scripts/` — вспомогательные утилиты и демо:
+  - `scripts/__init__.py` — пакет для запуска через `python -m`.
+  - `scripts/build_index.py` — сборка FAISS‑индекса из `data/sample_docs`.
+  - `scripts/call_api.py` — примеры вызовов API `/ask` и `/agent/ask` через Python.
+  - `scripts/compare_search.py` — сравнение результатов поиска Retriever vs прямой FAISS‑поиск.
+  - `scripts/demo_agent.py` — демонстрация агента с локальными инструментами.
+  - `scripts/demo_agent_mcp.py` — демонстрация агента с MCP backend.
+  - `scripts/demo_mcp_tools.py` — демонстрация вызовов MCP‑инструментов.
+  - `scripts/docker_smoke_test.py` — smoke‑тесты для docker‑запуска (API + MCP + agent).
+  - `scripts/preview_ingest.py` — предпросмотр чанкинга для документов ingestion.
+  - `scripts/run_api_docker.py` — запуск API внутри Docker (с автосборкой индекса при необходимости).
+  - `scripts/run_mcp_server.py` — запуск MCP‑сервера.
+  - `scripts/search_docs.py` — простой CLI‑поиск по FAISS‑индексу.
+- `src/` — основной код приложения:
+  - `src/__init__.py` — корневой пакет.
+  - `src/app/` — FastAPI приложение:
+    - `src/app/__init__.py` — пакет.
+    - `src/app/main.py` — эндпоинты `/ask`, `/agent/ask`, `/debug/*`, init сервисов.
+  - `src/agent/` — агент и инструменты:
+    - `src/agent/__init__.py` — пакет.
+    - `src/agent/agent.py` — core агент, роутинг инструментов, retries.
+    - `src/agent/tools.py` — реестр инструментов и спецификации.
+    - `src/agent/tool_backend.py` — переключение `local`/`mcp` backend.
+    - `src/agent/tool_impl.py` — реализация `search_docs` и `calc` (локально).
+    - `src/agent/calc.py` — безопасный арифметический калькулятор.
+  - `src/core/` — общие компоненты:
+    - `src/core/__init__.py` — пакет.
+    - `src/core/config.py` — настройки (env/.env) и дефолты.
+    - `src/core/context.py` — контекстные helpers.
+    - `src/core/errors.py` — обработчики ошибок.
+    - `src/core/logging.py` — настройка логирования.
+    - `src/core/middleware.py` — middleware для request‑id и access‑логов.
+  - `src/index/` — FAISS‑хранилище:
+    - `src/index/__init__.py` — пакет.
+    - `src/index/faiss_store.py` — build/load/search FAISS‑индекса.
+  - `src/ingest/` — ingestion pipeline:
+    - `src/ingest/__init__.py` — пакет.
+    - `src/ingest/loader.py` — загрузка `.txt/.md/.pdf`.
+    - `src/ingest/chunker.py` — чанкинг текста.
+    - `src/ingest/md_chunker.py` — чанкинг markdown‑файлов.
+    - `src/ingest/embedder_hf.py` — эмбеддер на базе HF sentence‑transformers.
+    - `src/ingest/pipeline.py` — сборка чанков по директории документов.
+  - `src/mcp/` — MCP слой:
+    - `src/mcp/client.py` — MCP‑клиент для вызова инструментов.
+    - `src/mcp/server.py` — MCP‑сервер, экспонирующий инструменты.
+  - `src/rag/` — RAG логика:
+    - `src/rag/llm_clients.py` — клиенты Ollama и OpenAI‑compatible.
+    - `src/rag/retriever.py` — поиск по FAISS и embedding‑логика.
+    - `src/rag/schemas.py` — pydantic‑схемы запросов/ответов.
+    - `src/rag/service.py` — сборка prompt и генерация ответа.

@@ -1,104 +1,141 @@
-# llm-rag-agent-pet
+# RAG + Agent + MCP (pet-проект)
 
-## Docker quickstart
+## Что это за проект
+Этот репозиторий — компактный, но воспроизводимый MVP‑стек: RAG‑сервис с индексом FAISS, агентом с tool‑calling и MCP‑сервером/клиентом. Он показывает полный контур от ingestion документов до ответов через FastAPI, а также переключение инструментов между локальной реализацией и MCP‑backend. Проект ориентирован на демонстрацию инженерной зрелости: чистые скрипты, воспроизводимые шаги, Docker‑сборка и прозрачные ограничения.
 
-Linux/macOS:
+RAG‑часть отвечает за подготовку индекса (чанкинг, эмбеддинги, FAISS) и за `/ask`‑эндпоинт, который комбинирует retrieval и LLM‑ответ. Агентная часть строит ответ на базе tool‑calling: сначала выбирается инструмент (`search_docs` или `calc`), затем LLM формирует финальный ответ из наблюдений. MCP слой позволяет вынести инструменты в отдельный HTTP‑сервер и демонстрирует клиент/серверную интеграцию с контролем лимитов и ошибок.
 
-```bash
-docker compose up --build
-python scripts/docker_smoke_test.py
-```
+Сервис рассчитан на локальный LLM через Ollama (по умолчанию), но архитектура оставляет возможность OpenAI‑совместимого режима.
 
-Windows PowerShell:
+## Фичи
+- Ingestion документов `.txt/.md/.pdf` с нормализацией текста и чанкингом.
+- Векторный индекс FAISS с сохранением метаданных и контрольной проверкой модели эмбеддингов.
+- FastAPI API с `/ask` (RAG) и `/agent/ask` (agent tool‑calling).
+- Инструменты `search_docs` и `calc` (локально или через MCP backend).
+- Переключение backend‑а инструментов: `TOOL_BACKEND=local|mcp`.
+- Docker / docker‑compose для воспроизводимого запуска.
+- Smoke‑тесты для проверки API, MCP и agent‑потока.
 
-```powershell
-docker compose up --build
-python scripts/docker_smoke_test.py
-```
-
-Для демонстрации агента с MCP backend задайте переменную окружения:
-
-```bash
-TOOL_BACKEND=mcp docker compose up --build
-```
-
-```powershell
-$env:TOOL_BACKEND="mcp"
-docker compose up --build
-```
-
-## Ollama (внешняя зависимость)
-
-Ollama запускается вне контейнеров. Убедитесь, что она доступна на хосте:
-
-```bash
-curl http://localhost:11434/api/tags
-```
-
-В Docker Compose используется `http://host.docker.internal:11434` для доступа к Ollama.
-
-## Architecture
-
+## Архитектура
 ```mermaid
 graph TD
   U[User] --> API[FastAPI API]
   API --> Agent[Agent]
-  Agent --> Tools[tools: LOCAL or MCP]
+  Agent --> Tools[Tools: LOCAL or MCP]
   Tools --> Index[FAISS index]
   API --> Ollama[Ollama]
+  MCP[MCP server] --> Tools
 ```
 
-## What this proves
+## Repository map (кратко)
+- `src/app/` — FastAPI приложение и эндпоинты `/ask` и `/agent/ask`.
+- `src/rag/` — логика retrieval и LLM‑клиенты.
+- `src/agent/` — агент и инструменты (`search_docs`, `calc`) + переключение backend‑ов.
+- `src/mcp/` — MCP server/client для инструментов.
+- `src/ingest/` и `src/index/` — ingestion и FAISS‑индекс.
+- `scripts/` — сборка индекса, демо, smoke‑тесты, примеры вызовов API.
+- `data/` — документы и индекс (создаётся при сборке).
+- `docker-compose.yml` и `Dockerfile` — контейнеризация API/MCP.
+- `docs/repo_map.md` — подробная карта репозитория.
 
-- RAG + Agent работают поверх локального FAISS индекса.
-- Инструменты можно переключать между `local` и `mcp` backend.
-- MCP server экспонирует инструменты по HTTP.
-- API использует Ollama как внешний LLM.
+## Установка и запуск (локально)
 
-## Troubleshooting
+### 1) Виртуальное окружение и зависимости
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-- PowerShell UTF-8: используйте `chcp 65001` для корректного вывода UTF-8.
-- Таймауты LLM: увеличьте `OLLAMA_KEEP_ALIVE` и/или уменьшите `OLLAMA_NUM_PREDICT`.
+### 2) Запуск Ollama и проверка доступности
+По умолчанию используется `OLLAMA_BASE_URL=http://localhost:11434` и модель `llama3.2:3b`.
 
-## MCP
+```bash
+ollama serve
+```
 
-Минимальная совместимая реализация MCP-инструментов (HTTP + JSON), чтобы показать
-экспонирование инструментов, клиентское подключение и базовые меры безопасности.
+Проверка `/api/tags` через Python (без curl/PowerShell):
+```bash
+python - <<'PY'
+import json
+from urllib.request import urlopen
 
-### Запуск MCP server
+with urlopen("http://localhost:11434/api/tags") as r:
+    print(json.loads(r.read().decode("utf-8")))
+PY
+```
 
+### 3) Построение индекса
+```bash
+python scripts/build_index.py
+```
+Индекс создастся в `data/index`.
+
+### 4) Запуск API
+```bash
+uvicorn src.app.main:app --host 0.0.0.0 --port 8000
+```
+
+### 5) Запуск MCP server
+В отдельном терминале:
 ```bash
 python -m scripts.run_mcp_server
 ```
 
-Переменные окружения:
-- `MCP_HOST` (по умолчанию `0.0.0.0`)
-- `MCP_PORT` (по умолчанию `9001`)
-- `MCP_URL` (для клиента, по умолчанию `http://localhost:9001`)
-
-### Проверка MCP-инструментов
-
+### 6) Примеры запросов (python‑скрипты)
 ```bash
-python -m scripts.demo_mcp_tools
+# RAG endpoint
+python scripts/call_api.py "Как восстановить доступ к аккаунту?" --url http://localhost:8000/ask --debug
+
+# Agent endpoint
+python scripts/call_api.py "Посчитай 3.5% от 12000" --url http://localhost:8000/agent/ask
 ```
 
-Ожидаемое поведение:
-- `calc("3.5% * 12000")` возвращает значение около `420`.
-- `search_docs("как восстановить доступ к аккаунту?")` показывает `account_security.*`
-  среди top источников.
-- `Проверка на лимиты (calc)` возвращает `{'error': 'Expression too long (max 200 chars).'}`
-- `Проверка на лимиты (search_docs)` возвращает `{'error': 'Query too long (max 2000 chars).'}`
+## Запуск через Docker
 
-### Агент с MCP backend
+### 1) Старт сервисов
+```bash
+docker compose up --build
+```
 
-```powershell
-$env:TOOL_BACKEND="mcp"
+### 2) Переменные окружения
+- `OLLAMA_BASE_URL` — базовый URL Ollama (в compose по умолчанию `http://host.docker.internal:11434`).
+- `TOOL_BACKEND` — `local` или `mcp` (переключает инструменты агента).
+- `MCP_URL` — URL MCP‑сервера для клиента (в compose по умолчанию `http://mcp:9001`).
+
+Пример переключения MCP backend:
+```bash
+TOOL_BACKEND=mcp docker compose up --build
+```
+
+### 3) Smoke‑test
+```bash
+python -m scripts.docker_smoke_test
+```
+Таймаут в 180 секунд заложен на прогрев модели Ollama при первом запуске.
+
+## Demo
+```bash
+python -m scripts.demo_agent
+python -m scripts.demo_mcp_tools
 python -m scripts.demo_agent_mcp
 ```
 
-В логах и выводе будет видно, что инструменты вызываются через MCP
-(`tool_backend=mcp tool=...`). Этот шаг доказывает:
+## Что доказывает по стеку
+- Docker/compose: сервисы API + MCP запускаются одной командой.
+- FastAPI: REST‑эндпоинты `/ask`, `/agent/ask`, `/debug/*`.
+- RAG + FAISS: локальный индекс, retrieval, источники в ответе.
+- Локальный LLM через Ollama и управляемые таймауты запросов.
+- Tool calling агент: авто‑роутинг `calc`/`search_docs` и сбор финального ответа.
+- MCP server/client: инструменты доступны по HTTP и подключаются клиентом.
+- Обработка ошибок/таймаут/ретрай: retries для LLM, timeouts на инструменты, graceful fallbacks.
 
-- MCP server экспонирует инструменты и лимиты.
-- MCP client корректно их вызывает.
-- Агент работает с переключателем backend’а (local/mcp).
+## Troubleshooting
+- **PowerShell и UTF‑8.** Для запросов используйте `scripts/call_api.py` (он отправляет UTF‑8 байты) вместо ручного `curl` в PowerShell.
+- **`/agent/ask` долго отвечает.** Увеличьте таймаут клиента, прогрейте Ollama и проверьте `OLLAMA_BASE_URL`.
+- **Retrieval “не те документы”.** Пересоберите индекс: `python scripts/build_index.py`.
+
+---
+
+### English summary (short)
+Small, reproducible MVP that combines RAG (FAISS), an agent with tool‑calling, and MCP server/client. It runs on FastAPI and uses a local LLM via Ollama, with Docker/compose and smoke tests for reproducibility.
