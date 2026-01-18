@@ -1,9 +1,16 @@
+"""Directly call MCP tools for quick manual verification.
+
+Example:
+    python -m scripts.demo_mcp_tools
+"""
+
 import os
 
 from src.mcp.client import MCPClient
 
 
 def main() -> None:
+    """Call MCP tools and print raw responses."""
     base_url = os.getenv("MCP_URL", "http://localhost:9001")
     client = MCPClient(base_url)
 

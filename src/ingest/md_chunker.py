@@ -1,3 +1,5 @@
+"""Markdown-aware chunking helpers."""
+
 from __future__ import annotations
 
 import re
@@ -11,9 +13,10 @@ HEADER_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$", re.MULTILINE)
 
 
 def split_markdown_by_headers(md: str) -> List[Tuple[str, str]]:
-    """
-    Возвращает список секций: (title, body_text)
-    title включает уровень заголовка: "## Возвраты"
+    """Split Markdown into header-based sections.
+
+    Returns:
+        List of (title, body_text) pairs. Title includes the header level.
     """
     md = md.strip()
     if not md:
@@ -42,10 +45,7 @@ def chunk_markdown(
     chunk_size: int = 800,
     overlap: int = 120,
 ) -> List[Chunk]:
-    """
-    1) режем по заголовкам
-    2) каждый блок, если большой, дорезаем обычным chunk_text
-    """
+    """Chunk Markdown by headers and then by size."""
     sections = split_markdown_by_headers(md_text)
     chunks: List[Chunk] = []
     global_id = 0

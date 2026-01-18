@@ -1,3 +1,5 @@
+"""MCP tool server exposing a minimal HTTP protocol for tool calls."""
+
 from __future__ import annotations
 
 import os
@@ -17,10 +19,12 @@ ALLOWED_TOOLS = {"search_docs", "calc"}
 
 
 def create_mcp_app() -> FastAPI:
+    """Create and configure the MCP FastAPI application."""
     app = FastAPI(title="MCP Tools Server", version="0.1.0")
 
     @app.on_event("startup")
     async def startup_event() -> None:
+        """Initialize retriever on startup (best-effort)."""
         try:
             app.state.retriever = Retriever()
             log.info("MCP retriever ready.")
@@ -30,6 +34,7 @@ def create_mcp_app() -> FastAPI:
 
     @app.post("/tools/{tool_name}")
     async def call_tool(tool_name: str, payload: Dict[str, Any]) -> JSONResponse:
+        """Dispatch tool calls with strict allowlisting."""
         if tool_name not in ALLOWED_TOOLS:
             raise HTTPException(status_code=404, detail="Tool not found.")
 
@@ -51,6 +56,7 @@ def create_mcp_app() -> FastAPI:
 
     @app.get("/health")
     async def health() -> dict:
+        """Return minimal health status for the MCP server."""
         return {"status": "ok", "env": os.getenv("APP_ENV", "dev")}
 
     return app

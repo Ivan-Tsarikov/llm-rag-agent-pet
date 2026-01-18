@@ -1,3 +1,5 @@
+"""Sentence-transformers embedder wrapper for ingestion and search."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,17 +11,16 @@ from sentence_transformers import SentenceTransformer
 
 @dataclass
 class HFEmbedder:
+    """Embedder that uses sentence-transformers on CPU."""
     model_name: str
 
     def __post_init__(self) -> None:
+        """Initialize the underlying model."""
         # CPU по умолчанию, чтобы было предсказуемо
         self._model = SentenceTransformer(self.model_name, device="cpu")
 
     def embed_texts(self, texts: List[str]) -> np.ndarray:
-        """
-        Возвращает матрицу shape (n, d) float32.
-        normalize_embeddings=True -> косинусная близость = inner product.
-        """
+        """Return embedding matrix of shape (n, d) as float32."""
         vecs = self._model.encode(
             texts,
             batch_size=32,

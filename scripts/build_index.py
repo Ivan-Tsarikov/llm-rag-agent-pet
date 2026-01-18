@@ -1,3 +1,8 @@
+"""Build a FAISS index from local documents.
+
+Example:
+    python -m scripts.build_index
+"""
 from pathlib import Path
 import json
 from datetime import datetime
@@ -9,6 +14,7 @@ from src.index.faiss_store import ChunkRecord, FaissStore
 
 
 def main():
+    """Create embeddings and persist the FAISS index files."""
     settings = get_settings()
     index_dir = Path(settings.index_dir)
 
@@ -39,7 +45,7 @@ def main():
     store = FaissStore.build(vectors=vectors, records=records)
     store.save(index_dir)
 
-    # --- индекс-метаданные (паспорт индекса) ---
+    # --- index passport (metadata) -----------
     meta = {
         "created_at": datetime.now().isoformat(),
         "embedding_model_name": settings.embedding_model_name,

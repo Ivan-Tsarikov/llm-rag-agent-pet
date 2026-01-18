@@ -1,3 +1,5 @@
+"""Minimal MCP client for tool invocation over HTTP."""
+
 from __future__ import annotations
 
 import json
@@ -13,11 +15,15 @@ ALLOWED_TOOLS = {"search_docs", "calc"}
 
 
 class MCPClient:
+    """Client for calling MCP tool endpoints."""
+
     def __init__(self, base_url: str, timeout_s: float = 4.0) -> None:
+        """Initialize client with base URL and request timeout."""
         self.base_url = base_url.rstrip("/")
         self.timeout_s = timeout_s
 
     def _post(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """POST JSON payload and return a decoded JSON object."""
         url = f"{self.base_url}{path}"
         data = json.dumps(payload).encode("utf-8")
         req = request.Request(url, data=data, method="POST")
@@ -44,6 +50,7 @@ class MCPClient:
         return data_obj
 
     def call_tool(self, name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Call an allowed tool by name, returning the tool response."""
         if name not in ALLOWED_TOOLS:
             return {"error": "Tool not allowed."}
         log.info("tool_backend=mcp tool=%s", name)

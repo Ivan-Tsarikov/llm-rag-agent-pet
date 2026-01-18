@@ -1,3 +1,5 @@
+"""LLM client implementations for Ollama and OpenAI-compatible APIs."""
+
 from __future__ import annotations
 
 import os
@@ -13,16 +15,21 @@ log = get_logger(__name__)
 
 
 class LLMError(RuntimeError):
+    """LLM client error wrapper."""
     pass
 
 
 @dataclass(frozen=True)
 class LLMResponse:
+    """Typed container for LLM responses (kept for compatibility)."""
     text: str
 
 
 class BaseLLMClient:
+    """Interface for async LLM clients."""
+
     async def generate(self, prompt: str, timeout_s: float = 60.0) -> str:
+        """Generate a response from a prompt."""
         raise NotImplementedError
 
 
@@ -33,6 +40,7 @@ class OllamaClient(BaseLLMClient):
     """
 
     def __init__(self) -> None:
+        """Initialize client from settings."""
         s = get_settings()
         self.base_url = s.ollama_base_url.rstrip("/")
         self.model = s.ollama_model
@@ -41,6 +49,7 @@ class OllamaClient(BaseLLMClient):
         self.temperature = s.ollama_temperature
 
     async def generate(self, prompt: str, timeout_s: float = 60.0) -> str:
+        """Generate text via the Ollama /api/generate endpoint."""
         url = f"{self.base_url}/api/generate"
 
         payload: dict[str, Any] = {
@@ -54,6 +63,7 @@ class OllamaClient(BaseLLMClient):
             },
         }
 
+        # Timeout is explicit to avoid hanging on slow model warmups.
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s)) as client:
                 resp = await client.post(url, json=payload)
@@ -80,6 +90,7 @@ class OpenAICompatClient(BaseLLMClient):
     """
 
     def __init__(self) -> None:
+        """Initialize client from settings and verify API key."""
         s = get_settings()
         self.base_url = s.openai_base_url.rstrip("/")
         self.api_key = s.openai_api_key
@@ -88,6 +99,7 @@ class OpenAICompatClient(BaseLLMClient):
             raise LLMError("OPENAI_API_KEY is not set for openai mode.")
 
     async def generate(self, prompt: str, timeout_s: float = 60.0) -> str:
+        """Generate text via an OpenAI-compatible chat endpoint."""
         url = f"{self.base_url}/chat/completions"
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -103,6 +115,7 @@ class OpenAICompatClient(BaseLLMClient):
             "temperature": 0.2,
         }
 
+        # Timeout protects the service from long-running upstream calls.
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_s)) as client:
                 resp = await client.post(url, headers=headers, json=payload)
@@ -124,3 +137,4 @@ class OpenAICompatClient(BaseLLMClient):
         if not isinstance(text, str):
             raise LLMError("OpenAI-compatible API returned non-text content.")
         return text.strip()
+    

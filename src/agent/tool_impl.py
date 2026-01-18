@@ -1,3 +1,5 @@
+"""Local implementations of agent tools with safety limits."""
+
 from __future__ import annotations
 
 from typing import Any, Dict
@@ -6,6 +8,10 @@ from src.agent.calc import safe_calc, CalcError
 from src.rag.retriever import Retriever
 
 
+# ---------------------------------------------------------------------------
+# Section: Guardrail limits
+# ---------------------------------------------------------------------------
+# These limits protect the LLM/tool loop from oversized inputs and prompt abuse.
 MAX_QUERY_LEN = 2000
 MAX_TOP_K = 10
 MAX_HITS = 10
@@ -14,6 +20,7 @@ MAX_EXPR_LEN = 200
 
 
 def search_docs_impl(retriever: Retriever, query: str, top_k: int = 5) -> Dict[str, Any]:
+    """Search documents with size limits to keep responses safe and bounded."""
     q = (query or "").strip()
     if len(q) > MAX_QUERY_LEN:
         return {"error": f"Query too long (max {MAX_QUERY_LEN} chars)."}
@@ -41,6 +48,7 @@ def search_docs_impl(retriever: Retriever, query: str, top_k: int = 5) -> Dict[s
 
 
 def calc_impl(expression: str) -> Dict[str, Any]:
+    """Safely evaluate a math expression with strict length limits."""
     expr = (expression or "").strip()
     if len(expr) > MAX_EXPR_LEN:
         return {"error": f"Expression too long (max {MAX_EXPR_LEN} chars)."}

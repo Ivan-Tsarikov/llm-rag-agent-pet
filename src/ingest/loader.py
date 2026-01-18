@@ -1,3 +1,5 @@
+"""Document loaders for text/Markdown/PDF sources."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,16 +11,22 @@ import pdfplumber
 
 
 
+# ---------------------------------------------------------------------------
+# Section: Supported formats
+# ---------------------------------------------------------------------------
+# Limit formats to keep the ingestion pipeline deterministic and debuggable.
 SUPPORTED_EXTS = {".txt", ".md", ".pdf"}
 
 
 @dataclass(frozen=True)
 class Document:
+    """In-memory representation of a source document."""
     source_path: str  # relative or absolute path as string
     text: str
 
 
 def load_text_file(path: Path) -> str:
+    """Load UTF-8 text with safe fallback for unknown encodings."""
     # utf-8 with fallback to avoid crashes on weird docs
     try:
         return path.read_text(encoding="utf-8")
@@ -27,10 +35,10 @@ def load_text_file(path: Path) -> str:
 
 
 def clean_pdf_text(text: str) -> str:
-    """
-    Минимальная чистка именно PDF-текста:
-    - склеиваем переносы вида "паро-\nль" -> "пароль"
-    - нормализуем пробелы
+    """Apply minimal cleanup to PDF text.
+
+    - Merge hyphenated line breaks ("паро-\\nль" -> "пароль")
+    - Normalize whitespace
     """
     # склейка переносов по дефису на конце строки
     text = re.sub(r"(\w)-\n(\w)", r"\1\2", text)
@@ -45,6 +53,7 @@ def clean_pdf_text(text: str) -> str:
 
 
 def load_pdf_file(path: Path) -> str:
+    """Extract and clean text from a PDF file."""
     parts: list[str] = []
     with pdfplumber.open(str(path)) as pdf:
         for page in pdf.pages:
@@ -59,6 +68,7 @@ def load_pdf_file(path: Path) -> str:
 
 
 def load_document(path: Path) -> Document:
+    """Load a document from disk based on its file extension."""
     ext = path.suffix.lower()
     if ext not in SUPPORTED_EXTS:
         raise ValueError(f"Unsupported extension: {ext} for {path}")
@@ -72,6 +82,7 @@ def load_document(path: Path) -> Document:
 
 
 def iter_documents(root_dir: Path) -> Iterable[Document]:
+    """Yield non-empty documents from the given root directory."""
     if not root_dir.exists():
         raise FileNotFoundError(f"Docs directory not found: {root_dir}")
 

@@ -1,4 +1,11 @@
-# src/agent/agent.py
+"""Tool-calling agent loop with safe JSON parsing and fallbacks.
+
+The agent has a deliberately constrained flow:
+1) Auto-route to a tool (math or search).
+2) Ask the LLM for a final answer using tool observations.
+
+The design favors robustness over strict JSON-only behavior.
+"""
 
 from __future__ import annotations
 
@@ -16,6 +23,7 @@ log = get_logger(__name__)
 
 @dataclass
 class AgentStep:
+    """One step in the agent trace."""
     step: int
     llm_raw: str
     action: str
@@ -25,16 +33,18 @@ class AgentStep:
 
 
 class AgentError(RuntimeError):
+    """Agent-specific parsing/runtime error."""
     pass
 
 
-# -------------------------
-# Helpers: parsing & routing
-# -------------------------
+# ---------------------------------------------------------------------------
+# Section: Helpers (parsing & routing)
+# ---------------------------------------------------------------------------
 def _extract_first_json_object(text: str) -> Dict[str, Any]:
-    """
-    Пытаемся вытащить ПЕРВЫЙ валидный JSON-объект (dict) из произвольного текста.
-    Важно: это "best-effort" — в рантайме мы НЕ должны падать, если JSON нет.
+    """Extract the first valid JSON object from free-form text.
+
+    This is best-effort parsing: the agent should keep running even if
+    the model returns a non-JSON answer or includes extra text.
     """
     s = (text or "").strip()
     if not s:
@@ -59,6 +69,7 @@ _MATH_HINT_RE = re.compile(r"(\d|\bпроцент\b|%|\+|\-|\*|/|сколько|
 
 
 def _looks_like_math(question: str) -> bool:
+    """Heuristic check for arithmetic intent."""
     q = (question or "").strip()
     if len(q) < 2:
         return False
@@ -66,9 +77,10 @@ def _looks_like_math(question: str) -> bool:
 
 
 def _extract_math_expr(question: str) -> str:
-    """
-    Преобразуем типичные русские формулировки в арифметическое выражение.
-    Ключевой кейс: "3.5% от 12000" -> "(12000*3.5/100)".
+    """Convert common Russian phrasing to an arithmetic expression.
+
+    Example:
+        "3.5% от 12000" -> "(12000*3.5/100)"
     """
     q = (question or "").strip()
 
@@ -107,10 +119,7 @@ def _extract_math_expr(question: str) -> str:
 
 
 def _compact_hits(tool_result: Dict[str, Any], max_hits: int = 5, preview_chars: int = 400) -> Dict[str, Any]:
-    """
-    Чтобы не раздувать prompt, кладём в память компактный результат:
-    - путь/чанк/скор/превью
-    """
+    """Shrink tool results to keep prompts within LLM limits (path/chunk/score/preview)."""
     hits = tool_result.get("hits")
     if not isinstance(hits, list):
         return tool_result
@@ -132,6 +141,7 @@ def _compact_hits(tool_result: Dict[str, Any], max_hits: int = 5, preview_chars:
 
 
 def _build_system_prompt_final_only() -> str:
+    """Build a strict system prompt for the final answer stage."""
     # ВАЖНО: не требуем JSON. Цель — стабильность.
     return (
         "Ты помощник службы поддержки маркетплейса.\n"
@@ -145,6 +155,7 @@ def _build_system_prompt_final_only() -> str:
 
 
 def _build_user_prompt_final(question: str, memory: List[Tuple[str, str]]) -> str:
+    """Build user prompt that includes tool observations."""
     parts = [f"Вопрос:\n{question}\n"]
     if memory:
         parts.append("Наблюдения (результаты инструментов):\n")
@@ -159,10 +170,7 @@ _ANSWER_FIELD_RE = re.compile(r'"answer"\s*:\s*"(.*)"\s*}\s*$', re.DOTALL)
 
 
 def _best_effort_extract_answer(text: str) -> Optional[str]:
-    """
-    На случай невалидного JSON (чаще всего из-за неэкранированных кавычек внутри answer).
-    Достаём answer "как есть" и слегка разэкраниваем.
-    """
+    """Extract answer text when JSON is broken by unescaped quotes."""
     s = (text or "").strip()
     m = _ANSWER_FIELD_RE.search(s)
     if not m:
@@ -173,9 +181,7 @@ def _best_effort_extract_answer(text: str) -> Optional[str]:
 
 
 def _coerce_text_from_obj(obj: Dict[str, Any]) -> Optional[str]:
-    """
-    Если LLM вернул НЕ final-объект (или внутренний JSON), пытаемся вытащить хоть какой-то текст.
-    """
+    """Coerce any reasonable text payload from a parsed JSON object."""
     for k in ("answer", "text", "text_preview", "formatted"):
         v = obj.get(k)
         if isinstance(v, str) and v.strip():
@@ -189,9 +195,7 @@ def _coerce_text_from_obj(obj: Dict[str, Any]) -> Optional[str]:
 
 
 def _fallback_from_search_hits(tool_result: Dict[str, Any]) -> str:
-    """
-    Фоллбек, если LLM недоступен/сломался: вернём top-1 хит как ответ.
-    """
+    """Return a minimal answer from top search hit if the LLM fails."""
     hits = tool_result.get("hits")
     if not isinstance(hits, list) or not hits:
         return "В базе документов нет релевантного ответа по этому вопросу."
@@ -209,9 +213,10 @@ def _fallback_from_search_hits(tool_result: Dict[str, Any]) -> str:
     return f"Источник: {src}"
 
 
-# -------------------------
-# Main agent
-# -------------------------
+# ---------------------------------------------------------------------------
+# Section: Main agent
+# ---------------------------------------------------------------------------
+# The loop is intentionally minimal and deterministic for demo stability.
 async def run_agent(
     *,
     llm_generate,  # async callable(prompt:str, timeout_s:float)->str
@@ -221,21 +226,24 @@ async def run_agent(
     llm_timeout_s: float = 60.0,
     retry_once: bool = True,
 ) -> Tuple[str, List[AgentStep]]:
-    """
-    Надёжный MVP-агент:
-      - Шаг 1 (авто): если математика -> calc, иначе -> search_docs
-      - Шаг 2: LLM делает только финальный ответ по observation (или фоллбек)
+    """Run the two-step MVP agent with safe fallbacks.
+
+    Steps:
+        1) Auto-route to a tool: math -> calc, otherwise -> search_docs.
+        2) Ask the LLM to provide a final answer using observations.
     """
     _ = max_steps  # сейчас шагов всегда 2; оставляем параметр для совместимости
     steps: List[AgentStep] = []
     memory: List[Tuple[str, str]] = []
 
     async def call_tool(tool_name: str, args: Dict[str, Any]) -> Dict[str, Any]:
+        """Call a tool with guardrails around input size and timeouts."""
         spec = tools.get(tool_name)
         if not spec:
             raise ToolError(f"Tool '{tool_name}' is not allowed.")
         for _k, v in args.items():
             if isinstance(v, str) and len(v) > 2000:
+                # Hard limits keep tool payloads safe against prompt injection abuse.
                 raise ToolError("Tool argument too large.")
         return await asyncio.wait_for(spec.handler(args), timeout=spec.timeout_s)
 
@@ -258,7 +266,7 @@ async def run_agent(
 
     step1.tool_result = tool_result
 
-    # Если это calc и он успешен — не зовём LLM вообще (максимальная стабильность)
+    # If calc succeeds, skip the LLM to avoid latency and unnecessary variability.
     if tool_name == "calc" and isinstance(tool_result, dict) and not tool_result.get("error"):
         formatted = tool_result.get("formatted")
         value = tool_result.get("value")
@@ -267,7 +275,7 @@ async def run_agent(
         steps.append(AgentStep(step=2, llm_raw="<skipped>", action="final_from_calc"))
         return out if out else "", steps
 
-    # кладём в memory компактно
+    # Keep memory compact to avoid blowing the prompt token budget.
     obs_payload = {"tool": tool_name, "result": _compact_hits(tool_result)}
     memory.append(("observation", json.dumps(obs_payload, ensure_ascii=False)))
 

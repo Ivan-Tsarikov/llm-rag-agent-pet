@@ -1,3 +1,5 @@
+"""Tool registry builder that can switch between local and MCP backends."""
+
 from __future__ import annotations
 
 from typing import Any, Dict, Optional
@@ -18,6 +20,13 @@ def build_tool_registry(
     retriever: Optional[Retriever] = None,
     mcp_client: Optional[MCPClient] = None,
 ) -> ToolRegistry:
+    """Build a ToolRegistry for the requested backend.
+
+    Args:
+        backend: Backend selector ("local" or "mcp").
+        retriever: Retriever for local search tools.
+        mcp_client: MCP client for remote tool calls.
+    """
     tools = ToolRegistry()
     backend_norm = (backend or "local").lower()
 
@@ -31,6 +40,7 @@ def build_tool_registry(
         async def tool_calc(args: Dict[str, Any]) -> Dict[str, Any]:
             return mcp_client.call_tool("calc", args)
 
+        # MCP keeps tools isolated from the app process and is toggled via TOOL_BACKEND.
         log.info("Tool backend configured: mcp")
     else:
         async def tool_search_docs(args: Dict[str, Any]) -> Dict[str, Any]:

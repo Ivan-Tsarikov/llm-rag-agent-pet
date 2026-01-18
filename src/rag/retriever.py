@@ -1,3 +1,5 @@
+"""Retriever that loads a FAISS index and returns top-k hits."""
+
 from __future__ import annotations
 
 import json
@@ -16,16 +18,16 @@ log = get_logger(__name__)
 
 
 class Retriever:
-    """
-    Loads FAISS index + chunk records and provides search(query)->top hits.
-    Also exposes embedding_model_name and query_vector_norm() for debugging.
-    """
-
+    """Load FAISS index/chunks and provide semantic search."""
     def __init__(self) -> None:
+        """Initialize retriever and validate index metadata."""
         self.settings = get_settings()
         index_dir = Path(self.settings.index_dir).resolve()
 
-        # 1) Проверим, что индекс на месте
+        # -------------------------------------------------------------------
+        # Section: Index presence checks
+        # -------------------------------------------------------------------
+        # Failing fast prevents silent, confusing empty search results.
         faiss_path = index_dir / "faiss.index"
         chunks_path = index_dir / "chunks.jsonl"
         if not faiss_path.exists() or not chunks_path.exists():
@@ -35,12 +37,15 @@ class Retriever:
                 f"Run: python scripts/build_index.py"
             )
 
-        # 2) Загрузим индекс/чанки
+        # -------------------------------------------------------------------
+        # Section: Load index and chunks
+        # -------------------------------------------------------------------
         self.store = FaissStore.load(index_dir)
 
-        # 3) Выберем embedding model:
-        #    - по умолчанию из settings
-        #    - если есть index_meta.json — сверим
+        # -------------------------------------------------------------------
+        # Section: Embedding model compatibility
+        # -------------------------------------------------------------------
+        # We warn on model mismatch so callers can rebuild the index if needed.
         model_name: str = self.settings.embedding_model_name
         self.embedding_model_name: str = model_name
 
@@ -59,17 +64,19 @@ class Retriever:
                         if self.settings.rag_strict_index_meta:
                             raise RuntimeError(msg)
                         log.warning(msg + " (strict meta check disabled)")
-                        # Можно принудительно использовать built_with, но это опасно если модели нет локально
-                        # Поэтому здесь мы только предупреждаем.
+                        # Do not auto-switch models: doing so can hide mismatches.
             except Exception as e:
                 if self.settings.rag_strict_index_meta:
                     raise RuntimeError(f"Failed to read index_meta.json: {e}") from e
                 log.warning("Failed to read index_meta.json: %s", e)
 
-        # 4) Инициализируем эмбеддер
+        # -------------------------------------------------------------------
+        # Section: Embedder init
+        # -------------------------------------------------------------------
         self.embedder = HFEmbedder(self.embedding_model_name)
 
     def query_vector_norm(self, query: str) -> float:
+        """Return L2 norm of a query embedding (for debugging)."""
         v = self.embedder.embed_texts([query])
         # v: (1, D)
         vv = v[0]
@@ -77,6 +84,7 @@ class Retriever:
         return n
 
     def search(self, query: str, top_k: int = 5) -> List[SearchHit]:
+        """Search the index and return top-k hits."""
         query = query.strip()
         if len(query) < 2:
             return []
@@ -85,7 +93,7 @@ class Retriever:
 
         qv = self.embedder.embed_texts([query])  # (1, D)
 
-        # Sanity checks: no NaN/Inf and non-zero vector
+        # Sanity checks: guard against NaN/Inf/zero vectors in embedding output.
         s = float((qv * qv).sum())
         if not math.isfinite(s) or s < 1e-12:
             log.warning("Bad query embedding (nan/inf/zero). query=%r", query[:100])

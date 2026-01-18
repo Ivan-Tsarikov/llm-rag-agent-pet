@@ -1,3 +1,9 @@
+"""Call the /ask endpoint and pretty-print the JSON response.
+
+Example:
+    python -m scripts.call_api "Как восстановить доступ к аккаунту?"
+"""
+
 import argparse
 import json
 import sys
@@ -6,6 +12,8 @@ from urllib.error import URLError, HTTPError
 
 
 def post_json(url: str, payload: dict, timeout: float = 30.0) -> dict:
+    """POST JSON payload and parse a JSON response."""
+    # UTF-8 is explicit to avoid PowerShell/Windows mojibake on Cyrillic text.
     data = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     req = Request(
         url=url,
@@ -39,7 +47,6 @@ def main():
     payload = {"question": args.question, "top_k": args.top_k}
     res = post_json(args.url, payload, timeout=args.timeout)
 
-    # Pretty-print full response (keeps Cyrillic)
     print(json.dumps(res, ensure_ascii=False, indent=2))
 
     if args.debug and isinstance(res, dict) and "sources" in res:

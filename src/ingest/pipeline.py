@@ -1,3 +1,5 @@
+"""Ingestion pipeline utilities for building chunks."""
+
 from pathlib import Path
 from typing import List
 
@@ -8,6 +10,7 @@ from src.ingest.md_chunker import chunk_markdown
 
 
 def build_chunks(settings: Settings) -> List[Chunk]:
+    """Load documents from disk and build text/Markdown chunks."""
     docs_dir = Path(settings.docs_dir)
 
     all_chunks: List[Chunk] = []

@@ -1,3 +1,5 @@
+"""Run the MCP tools server with Uvicorn."""
+
 import os
 
 import uvicorn
@@ -8,6 +10,7 @@ from src.mcp.server import create_mcp_app
 
 
 def main() -> None:
+    """Start the MCP FastAPI app."""
     settings = get_settings()
     setup_logging(settings.log_level)
 

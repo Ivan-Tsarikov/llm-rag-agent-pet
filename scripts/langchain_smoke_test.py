@@ -1,8 +1,4 @@
-"""Run a smoke test against local Docker services.
-
-Example:
-    python -m scripts.docker_smoke_test
-"""
+"""Smoke test for the LangChain RAG endpoint."""
 
 from __future__ import annotations
 
@@ -43,31 +39,15 @@ def assert_true(condition: bool, message: str) -> None:
 
 
 def main() -> int:
-    """Run a small suite of checks against the API and MCP server."""
-    print("[1/3] API health check...")
-    health = request_json("GET", "http://localhost:8000/health")
-    assert_true(health.get("status") == "ok", f"Unexpected health response: {health}")
-    print("    OK")
-
-    print("[2/3] MCP calc tool...")
-    calc = request_json(
+    """Run a minimal check against /ask_langchain."""
+    print("[1/1] LangChain ask...")
+    response = request_json(
         "POST",
-        "http://localhost:9001/tools/calc",
-        {"expression": "3.5% * 12000"},
-    )
-    value = calc.get("value")
-    assert_true(value is not None, f"Missing value in calc response: {calc}")
-    assert_true(abs(float(value) - 420.0) < 1e-6, f"Unexpected calc value: {value}")
-    print("    OK")
-
-    print("[3/3] Agent ask...")
-    agent = request_json(
-        "POST",
-        "http://localhost:8000/agent/ask",
+        "http://localhost:8000/ask_langchain",
         {"question": "Как восстановить доступ к аккаунту?"},
     )
-    sources = agent.get("sources")
-    assert_true(isinstance(sources, list) and sources, f"Missing sources: {agent}")
+    sources = response.get("sources")
+    assert_true(isinstance(sources, list) and sources, f"Missing sources: {response}")
     first_source = sources[0]
     source_path = first_source.get("source_path", "") if isinstance(first_source, dict) else ""
     assert_true(
@@ -75,8 +55,6 @@ def main() -> int:
         f"Unexpected source_path: {source_path}",
     )
     print("    OK")
-
-    print("All smoke checks passed.")
     return 0
 
 

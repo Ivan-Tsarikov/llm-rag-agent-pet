@@ -1,3 +1,5 @@
+"""RAG service helpers for prompt building and answer generation."""
+
 from __future__ import annotations
 
 import os
@@ -11,9 +13,7 @@ log = get_logger(__name__)
 
 
 def _build_context(hits, max_chars: int = 3500) -> str:
-    """
-    Собираем контекст из топ-хитов с ограничением по символам.
-    """
+    """Assemble context blocks from hits with a character budget."""
     parts: list[str] = []
     total = 0
 
@@ -44,10 +44,12 @@ def _build_prompt(question: str, context: str) -> str:
 
 
 async def generate_answer(question: str, hits, llm_mode: str | None = None) -> str:
-    """
-    Генерирует ответ по вопросу и найденным фрагментам.
-    llm_mode:
-      - "ollama" или "openai" (если None — возьмём из settings/env)
+    """Generate an answer for a question using retrieved hits.
+
+    Args:
+        question: User question.
+        hits: Search hits to include in context.
+        llm_mode: "ollama" or "openai" (falls back to settings/env when None).
     """
     settings = get_settings()
 
@@ -64,7 +66,7 @@ async def generate_answer(question: str, hits, llm_mode: str | None = None) -> s
         else:
             client = OllamaClient()
 
-        # timeout берём разумный: Ollama может быть медленным на первом запросе
+        # Timeout is conservative because Ollama can be slow on first request.
         text = await client.generate(prompt, timeout_s=90.0)
         return text.strip()
     except LLMError:

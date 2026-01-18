@@ -1,3 +1,5 @@
+"""Text chunking utilities used during index building."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -6,6 +8,7 @@ from typing import List
 
 @dataclass(frozen=True)
 class Chunk:
+    """Chunk of source text with character offsets."""
     source_path: str
     chunk_id: int
     text: str
@@ -14,6 +17,7 @@ class Chunk:
 
 
 def normalize_text(text: str) -> str:
+    """Normalize whitespace without destroying paragraph structure."""
     # минимальная нормализация: убираем лишние пробелы, но не ломаем структуру сильно
     lines = [ln.rstrip() for ln in text.splitlines()]
     return "\n".join(lines).strip()
@@ -26,11 +30,13 @@ def chunk_text(
     overlap: int = 120,
     min_chunk_chars: int = 200,
 ) -> List[Chunk]:
-    """
-    Режем по символам. Это не идеально, но прозрачно и предсказуемо.
-    chunk_size/overlap можно позже подкрутить.
-
-    min_chunk_chars — чтобы не плодить микрочанки.
+    """Split text into overlapping chunks by character count.
+    Args:
+        source_path: Path to the original document.
+        text: Raw document text.
+        chunk_size: Max characters per chunk.
+        overlap: Overlap between adjacent chunks.
+        min_chunk_chars: Minimum chunk length to keep.
     """
     if chunk_size <= 0:
         raise ValueError("chunk_size must be > 0")

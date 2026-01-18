@@ -1,3 +1,9 @@
+"""Run the local tool-calling agent against a few sample questions.
+
+Example:
+    python -m scripts.demo_agent
+"""
+
 import asyncio
 import json
 
@@ -10,6 +16,7 @@ from src.rag.llm_clients import OllamaClient
 
 
 async def main():
+    """Run a short agent demo using local tools and Ollama."""
     settings = get_settings()
     retriever = Retriever()
 

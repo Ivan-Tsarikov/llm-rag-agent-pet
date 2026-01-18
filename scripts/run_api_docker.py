@@ -1,3 +1,5 @@
+"""Run the API locally, ensuring the index exists first."""
+
 from __future__ import annotations
 
 import subprocess
@@ -5,6 +7,7 @@ from pathlib import Path
 
 
 def main() -> None:
+    """Build the index if needed and start Uvicorn."""
     index_dir = Path("data/index")
     faiss_file = index_dir / "faiss.index"
     chunks_file = index_dir / "chunks.jsonl"
