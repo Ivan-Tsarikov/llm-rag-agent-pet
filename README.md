@@ -59,14 +59,13 @@ flowchart TD
 - Docker (опционально)
 
 Проверка Ollama через Python:
-```bash
-python - <<'PY'
+```python
 import json
 from urllib.request import urlopen
 
 with urlopen("http://localhost:11434/api/tags") as r:
     print(json.loads(r.read().decode("utf-8")))
-PY
+
 ```
 
 ## 6) Установка и запуск (локально)
