@@ -133,7 +133,8 @@ docker compose up --build
 
 Пример переключения MCP backend:
 ```bash
-TOOL_BACKEND=mcp docker compose up --build
+$env:TOOL_BACKEND="mcp"
+docker compose up --build
 ```
 
 ### 3) Smoke‑test
