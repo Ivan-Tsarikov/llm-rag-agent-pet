@@ -121,6 +121,27 @@ python -m scripts.demo_mcp_tools
 python -m scripts.demo_agent_mcp
 ```
 
+## LangChain demo (optional)
+Этот режим — демонстрация альтернативного RAG‑подхода через LangChain. Основной сервис остаётся без LangChain
+и не зависит от него.
+
+### Как запустить
+```bash
+# FastAPI endpoint
+python -m scripts.call_api "Как восстановить доступ к аккаунту?" --url http://localhost:8000/ask_langchain
+
+# CLI demo
+python -m scripts.demo_langchain "Как восстановить доступ к аккаунту?"
+```
+
+### Что демонстрирует
+- Обёртку существующего `Retriever.search(...)` в LangChain Runnable‑цепочку.
+- Генерацию ответа через существующий LLM клиент (Ollama/OpenAI‑compatible), без доп. векторных БД.
+
+### Чем отличается от основного
+- Основной RAG (`/ask`) работает без LangChain.
+- LangChain‑демо — отдельный optional‑слой для сравнения альтернативного подхода.
+
 ## Что доказывает по стеку
 - Docker/compose: сервисы API + MCP запускаются одной командой.
 - FastAPI: REST‑эндпоинты `/ask`, `/agent/ask`, `/debug/*`.

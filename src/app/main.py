@@ -17,6 +17,7 @@ from src.rag.schemas import AskRequest, AskResponse, SourceItem
 from src.rag.retriever import Retriever
 from src.rag.service import generate_answer
 from src.rag.llm_clients import LLMError, OllamaClient, OpenAICompatClient
+from src.langchain_demo.pipeline import run_langchain_rag
 
 from src.agent.tools import ToolRegistry
 from src.agent.tool_backend import build_tool_registry
@@ -118,6 +119,7 @@ def root():
             "endpoints": [
                 "/health (GET)",
                 "/ask (POST)",
+                "/ask_langchain (POST)",
                 "/agent/ask (POST)",
                 "/debug/index (GET)",
                 "/debug/search (POST)",
@@ -157,6 +159,29 @@ async def ask(req: AskRequest):
         )
         for h in hits
     ]
+    return AskResponse(answer=answer, sources=sources)
+
+
+# ---------------------------------------------------------------------
+# LangChain demo endpoint (optional)
+# ---------------------------------------------------------------------
+@app.post("/ask_langchain", response_model=AskResponse)
+async def ask_langchain(req: AskRequest):
+    retriever = _get_retriever()
+    llm_client = _get_llm_client()
+
+    top_k = req.top_k or settings.top_k
+
+    try:
+        answer, sources = await run_langchain_rag(
+            question=req.question,
+            retriever=retriever,
+            llm_client=llm_client,
+            top_k=top_k,
+        )
+    except LLMError as exc:
+        raise HTTPException(status_code=502, detail=f"LLM timeout or error: {exc}") from exc
+
     return AskResponse(answer=answer, sources=sources)
 
 
